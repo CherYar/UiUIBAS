@@ -16,4 +16,7 @@ foreach($matches[1] as $item) {
 
 // Output cookies
 print_r($cookies);
+foreach ($cookies as $name => $value) {
+    echo "$name: $value<br>\n";
+}
 ?>
