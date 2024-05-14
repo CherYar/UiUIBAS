@@ -1,0 +1,5 @@
+set RHOSTS 192.168.56.11
+set RPORT 80
+set TARGETURI /bwapp/ba_weak_pwd.php
+set USERNAME test
+set PASSWORD test
