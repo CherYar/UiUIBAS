@@ -1,0 +1,254 @@
+---
+- name: CIS Debian 12 Benchmark - Section 5.4 (User Accounts and Environment)
+  hosts: all
+  become: yes
+  vars:
+    # 5.4.1
+    max_password_age: 90
+    min_password_age: 7
+    password_warn_age: 7
+    inactive_lock_days: 30
+    pass_algorithm: "yescrypt"
+    
+    # 5.4.3
+    user_umask: 027
+    shell_timeout: 900
+
+  tasks:
+    # =====================
+    # 5.4.1 Shadow Password Suite
+    # =====================
+    
+    # 5.4.1.1 - Password expiration
+    - name: Ensure PASS_MAX_DAYS is configured
+      ansible.builtin.lineinfile:
+        path: /etc/login.defs
+        regexp: "^PASS_MAX_DAYS"
+        line: "PASS_MAX_DAYS {{ max_password_age }}"
+        state: present
+        backup: yes
+
+    # 5.4.1.2 - Minimum password age
+    - name: Ensure PASS_MIN_DAYS is configured
+      ansible.builtin.lineinfile:
+        path: /etc/login.defs
+        regexp: "^PASS_MIN_DAYS"
+        line: "PASS_MIN_DAYS {{ min_password_age }}"
+        state: present
+        backup: yes
+
+    # 5.4.1.3 - Password expiration warning
+    - name: Ensure PASS_WARN_AGE is configured
+      ansible.builtin.lineinfile:
+        path: /etc/login.defs
+        regexp: "^PASS_WARN_AGE"
+        line: "PASS_WARN_AGE {{ password_warn_age }}"
+        state: present
+        backup: yes
+
+    # 5.4.1.4 - Strong password hashing
+    - name: Ensure strong password hashing algorithm
+      ansible.builtin.lineinfile:
+        path: /etc/login.defs
+        regexp: "^ENCRYPT_METHOD"
+        line: "ENCRYPT_METHOD {{ pass_algorithm }}"
+        state: present
+        backup: yes
+
+    # 5.4.1.5 - Inactive password lock
+    - name: Set default inactive lock days
+      ansible.builtin.lineinfile:
+        path: /etc/default/useradd
+        regexp: "^INACTIVE"
+        line: "INACTIVE={{ inactive_lock_days }}"
+        state: present
+        backup: yes
+
+    - name: Apply inactive lock to existing users
+      ansible.builtin.command:
+        cmd: "chage --inactive {{ inactive_lock_days }} {{ item }}"
+      loop: "{{ ansible_users }}"
+      when: 
+        - item not in ['root', 'nobody', 'systemd-*']
+        - item not in system_users.stdout_lines
+      register: chage_result
+      changed_when: chage_result.rc == 0
+      failed_when: chage_result.rc != 0
+      tags: password_lock
+
+    # 5.4.1.6 - Last password change in past
+    - name: Verify all users last password change is in past
+      ansible.builtin.shell: |
+        for user in $(cut -d: -f1 /etc/passwd); do
+          lastchg=$(chage -l $user | grep 'Last password change' | cut -d: -f2)
+          if [[ "$lastchg" == *"must be changed"* ]]; then
+            echo "User $user has future password change date"
+            exit 1
+          fi
+        done
+      args:
+        executable: /bin/bash
+      changed_when: false
+      check_mode: false
+      tags: password_date_check
+
+    # =====================
+    # 5.4.2 Root and System Accounts
+    # =====================
+    
+    # 5.4.2.1 - Only one UID 0 account
+    - name: Ensure only one UID 0 account exists
+      ansible.builtin.shell: |
+        if [ $(awk -F: '($3 == 0) {print $1}' /etc/passwd | wc -l) -ne 1 ]; then
+          echo "Multiple UID 0 accounts detected"
+          exit 1
+        fi
+      changed_when: false
+      check_mode: false
+      tags: uid0_check
+
+    # 5.4.2.2 - Only one GID 0 account
+    - name: Ensure only one GID 0 account exists
+      ansible.builtin.shell: |
+        if [ $(awk -F: '($4 == 0) {print $1}' /etc/passwd | wc -l) -ne 1 ]; then
+          echo "Multiple GID 0 accounts detected"
+          exit 1
+        fi
+      changed_when: false
+      check_mode: false
+      tags: gid0_check
+
+    # 5.4.2.3 - Only one GID 0 group
+    - name: Ensure only one GID 0 group exists
+      ansible.builtin.shell: |
+        if [ $(awk -F: '($3 == 0) {print $1}' /etc/group | wc -l) -ne 1 ]; then
+          echo "Multiple GID 0 groups detected"
+          exit 1
+        fi
+      changed_when: false
+      check_mode: false
+      tags: gid0_group_check
+
+    # 5.4.2.4 - Root password set
+    - name: Ensure root password is set
+      ansible.builtin.shell: |
+        if [ "$(sudo passwd -S root | awk '{print $2}')" != "P" ]; then
+          echo "Root password is not set"
+          exit 1
+        fi
+      changed_when: false
+      check_mode: false
+      tags: root_password_check
+
+    # 5.4.2.5 - Root path integrity
+    - name: Ensure root PATH integrity
+      ansible.builtin.shell: |
+        if [ "$(echo $PATH | grep ::)" != "" ]; then exit 1; fi
+        if [ "$(echo $PATH | grep :$)" != "" ]; then exit 1; fi
+        for p in $(echo $PATH | tr ":" " "); do
+          if [ -d "$p" ]; then
+            if [ "$p" != "." ]; then
+              perms=$(stat -L -c "%A" "$p")
+              if [ "$(echo $perms | cut -c6)" != "-" ]; then exit 1; fi
+              if [ "$(echo $perms | cut -c9)" != "-" ]; then exit 1; fi
+            fi
+          fi
+        done
+      args:
+        executable: /bin/bash
+      changed_when: false
+      check_mode: false
+      environment:
+        PATH: "{{ ansible_env.PATH }}"
+      tags: root_path_check
+
+    # 5.4.2.6 - Root user umask
+    - name: Set root umask in profile files
+      ansible.builtin.lineinfile:
+        path: "{{ item }}"
+        regexp: '^(\s*umask\s+)|(^#\s*umask\s+)'
+        line: "umask {{ user_umask }}"
+        state: present
+      loop:
+        - /root/.bashrc
+        - /root/.profile
+        - /root/.bash_profile
+      tags: root_umask
+
+    # 5.4.2.7 - Lock system accounts
+    - name: Lock system accounts without valid shell
+      ansible.builtin.user:
+        name: "{{ item }}"
+        shell: /usr/sbin/nologin
+      loop: "{{ system_users.stdout_lines }}"
+      when: system_users.stdout_lines | length > 0
+      tags: lock_system_accounts
+
+    # 5.4.2.8 - Lock accounts with invalid shell
+    - name: Lock accounts without valid shell
+      ansible.builtin.user:
+        name: "{{ item }}"
+        password_lock: yes
+      loop: "{{ invalid_shell_users.stdout_lines }}"
+      when: invalid_shell_users.stdout_lines | length > 0
+      tags: lock_invalid_shell
+
+    # =====================
+    # 5.4.3 User Default Environment
+    # =====================
+    
+    # 5.4.3.1 - Ensure nologin not in /etc/shells
+    - name: Remove nologin from /etc/shells
+      ansible.builtin.lineinfile:
+        path: /etc/shells
+        regexp: '^/usr/sbin/nologin$'
+        state: absent
+      tags: nologin_remove
+
+    # 5.4.3.2 - Shell timeout configuration
+    - name: Set shell timeout in profile files
+      ansible.builtin.lineinfile:
+        path: "{{ item }}"
+        insertafter: EOF
+        line: |
+          TMOUT={{ shell_timeout }}
+          readonly TMOUT
+          export TMOUT
+      loop:
+        - /etc/profile
+        - /etc/profile.d/*.sh
+        - /etc/bash.bashrc
+      tags: shell_timeout
+
+    # 5.4.3.3 - Default user umask
+    - name: Set default umask in profile files
+      ansible.builtin.lineinfile:
+        path: "{{ item }}"
+        regexp: '^(\s*umask\s+)|(^#\s*umask\s+)'
+        line: "umask {{ user_umask }}"
+        state: present
+      loop:
+        - /etc/profile
+        - /etc/profile.d/*.sh
+        - /etc/bash.bashrc
+      tags: user_umask
+
+  handlers:
+    - name: Update last password change
+      ansible.builtin.command:
+        cmd: "chage -d $(date +%Y-%m-%d) root"
+      when: root_password_check is changed
+
+  pre_tasks:
+    - name: Get system users (UID < 1000)
+      ansible.builtin.shell: |
+        awk -F: '($3 < 1000 && $3 != 0) {print $1}' /etc/passwd
+      register: system_users
+      changed_when: false
+
+    - name: Get users with invalid shells
+      ansible.builtin.shell: |
+        grep -vE '^(root|sync|halt|shutdown)' /etc/passwd | 
+        awk -F: '($7 != "/usr/sbin/nologin" && $7 != "/bin/false" && $7 != "/usr/bin/false") { print $1 }'
+      register: invalid_shell_users
+      changed_when: false
