@@ -1,6 +1,6 @@
 ---
 - name: CIS Debian 12 Benchmark - Section 5.4 (User Accounts and Environment)
-  hosts: all
+  hosts: localhost
   become: yes
   vars:
     # 5.4.1
